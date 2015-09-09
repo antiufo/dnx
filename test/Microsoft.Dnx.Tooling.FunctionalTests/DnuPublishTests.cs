@@ -665,13 +665,14 @@ exec ""{2}{3}"" --appbase ""${0}"" Microsoft.Dnx.ApplicationHost --configuration
     '.': [ 'global.json' ]
 }";
 
-string expectedAppLockFile = @"{
+            string expectedAppLockFile = @"{
   ""locked"": false,
   ""version"": LOCKFILEFORMAT_VERSION,
   ""targets"": {
     ""DNX,Version=v4.6"": {
       ""Lib/1.0.0"": {
-        ""type"": ""project""
+        ""type"": ""project"",
+        ""framework"": ""DNX,Version=v4.5.1""
       }
     }
   },
@@ -721,7 +722,7 @@ string expectedAppLockFile = @"{
                     environment: environment,
                     workingDir: testEnv.ProjectPath);
                 Assert.Equal(0, exitCode);
-                
+
                 exitCode = DnuTestUtils.ExecDnu(
                     runtimeHomeDir,
                     subcommand: "publish",
@@ -1925,7 +1926,7 @@ string expectedAppLockFile = @"{
 
             var runtimeHomeDir = _fixture.GetRuntimeHomeDir(flavor, os, architecture);
 
-            using (var tempDir = TestUtils.CreateTempDir())
+            using (var tempDir = new DisposableDir())
             {
                 var publishOutputPath = Path.Combine(tempDir, "output");
                 var appPath = Path.Combine(tempDir, testApp);
@@ -2030,7 +2031,7 @@ string expectedAppLockFile = @"{
 
             var runtimeHomeDir = _fixture.GetRuntimeHomeDir(flavor, os, architecture);
 
-            using (var tempDir = TestUtils.CreateTempDir())
+            using (var tempDir = new DisposableDir())
             {
                 var publishOutputPath = Path.Combine(tempDir, "output");
                 var appPath = Path.Combine(tempDir, testApp);
@@ -2097,7 +2098,7 @@ string expectedAppLockFile = @"{
 
             var runtimeHomeDir = _fixture.GetRuntimeHomeDir(flavor, os, architecture);
 
-            using (var tempDir = TestUtils.CreateTempDir())
+            using (var tempDir = new DisposableDir())
             {
                 var publishOutputPath = Path.Combine(tempDir, "output");
                 var appPath = Path.Combine(tempDir, testApp);
@@ -2147,7 +2148,7 @@ string expectedAppLockFile = @"{
 
             var runtimeHomeDir = _fixture.GetRuntimeHomeDir(flavor, os, architecture);
 
-            using (var tempDir = TestUtils.CreateTempDir())
+            using (var tempDir = new DisposableDir())
             {
                 var outputPath = Path.Combine(tempDir, "output");
                 var solutionRootPath = Path.Combine(tempDir, testAppName);
@@ -2262,6 +2263,56 @@ string expectedAppLockFile = @"{
 }");
                 Assert.True(expectedOutputDir.MatchDirectoryOnDisk(testEnv.PublishOutputDirPath,
                     compareFileContents: true));
+            }
+        }
+
+        [Theory]
+        [MemberData(nameof(RuntimeComponents))]
+        public void PublishWithNoSourceOption_AppHasResourceFile(string flavor, string os, string architecture)
+        {
+            var runtimeHomeDir = _fixture.GetRuntimeHomeDir(flavor, os, architecture);
+
+            using (var tempDir = new DisposableDir())
+            {
+                var publishOutputPath = Path.Combine(tempDir, "output");
+                var appPath = Path.Combine(tempDir, "ResourcesTestProjects", "ReadFromResources");
+                TestUtils.CopyFolder(Path.Combine(TestUtils.GetMiscProjectsFolder(), "ResourcesTestProjects", "ReadFromResources"), appPath);
+                var workingDir = Path.Combine(appPath, "src", "ReadFromResources");
+
+                // Restore the application
+                var exitCode = DnuTestUtils.ExecDnu(runtimeHomeDir, "restore", appPath);
+                Assert.Equal(0, exitCode);
+
+                exitCode = DnuTestUtils.ExecDnu(
+                    runtimeHomeDir,
+                    subcommand: "publish",
+                    arguments: string.Format("--no-source --out {0}", publishOutputPath),
+                    environment: null,
+                    workingDir: workingDir);
+
+                Assert.Equal(0, exitCode);
+
+                var appOutputPath = Path.Combine(publishOutputPath, "approot", "packages", "ReadFromResources");
+                var versionDir = new DirectoryInfo(appOutputPath).GetDirectories().First().FullName;
+
+                Assert.True(File.Exists(Path.Combine(versionDir,
+                    "lib", "dnx451", "fr-FR", "ReadFromResources.resources.dll")), "Resources assembly did not get published for dnx451");
+                Assert.True(File.Exists(Path.Combine(versionDir,
+                    "lib", "dnxcore50", "fr-FR", "ReadFromResources.resources.dll")), "Resources assembly did not get published for dnxcore50");
+
+                appOutputPath = Path.Combine(publishOutputPath, "approot", "packages", "Microsoft.Data.Edm");
+                versionDir = new DirectoryInfo(appOutputPath).GetDirectories().First().FullName;
+                var edmLocales = new List<string>() {"de", "es", "fr", "it", "ja", "ko", "ru", "zh-Hans", "zh-Hant" };
+                var edmFxs = new List<string>() { "net40", "portable-net45+wp8+win8+wpa" };
+
+                foreach (var fx in edmFxs)
+                {
+                    foreach (var locale in edmLocales)
+                    {
+                        Assert.True(File.Exists(Path.Combine(versionDir, "lib", fx, locale, "Microsoft.Data.Edm.resources.dll")), 
+                            string.Format("Microsoft.Data.Edm {0} resources assembly did not get published for {1}", locale, fx));
+                    }
+                }
             }
         }
 

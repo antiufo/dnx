@@ -42,9 +42,26 @@ namespace Microsoft.Dnx.Tooling
             }
 
             // This never returns null
-            var targetFrameworkInfo = project.GetTargetFramework(targetFramework);
+            var targetFrameworkInfo = project.GetCompatibleTargetFramework(targetFramework);
 
             var dependencies = project.Dependencies.Concat(targetFrameworkInfo.Dependencies).ToList();
+            
+            if (!dependencies.Any(d => d.Name.Equals(ImplicitPackagesWalkProvider.ImplicitRuntimePackageId)))
+            {
+                dependencies.Add(new LibraryDependency()
+                {
+                    LibraryRange = new LibraryRange(ImplicitPackagesWalkProvider.ImplicitRuntimePackageId, frameworkReference: false)
+                    {
+                        VersionRange = new SemanticVersionRange()
+                        {
+                            MinVersion = ImplicitPackagesWalkProvider.ImplicitRuntimePackageVersion,
+                            MaxVersion = ImplicitPackagesWalkProvider.ImplicitRuntimePackageVersion,
+                            IsMaxInclusive = true,
+                            VersionFloatBehavior = SemanticVersionFloatBehavior.None
+                        }
+                    }
+                });
+            }
 
             return new ProjectDescription(
                 libraryRange,
